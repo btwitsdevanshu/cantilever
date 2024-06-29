@@ -1,0 +1,129 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class LibraryManagementSystem extends JFrame {
+    private static final String URL = "jdbc:mysql://localhost:3306/library_management";
+    private static final String USER = "root";
+    private static final String PASSWORD = "password";
+
+    private JTextField titleField, authorField, yearField;
+    private JTextArea displayArea;
+    private JButton addButton, listButton;
+
+    public LibraryManagementSystem() {
+        setTitle("Library Management System");
+        setSize(600, 400);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        JPanel inputPanel = new JPanel();
+        inputPanel.setLayout(new GridLayout(4, 2));
+        inputPanel.add(new JLabel("Title:"));
+        titleField = new JTextField(20);
+        inputPanel.add(titleField);
+        inputPanel.add(new JLabel("Author:"));
+        authorField = new JTextField(20);
+        inputPanel.add(authorField);
+        inputPanel.add(new JLabel("Published Year:"));
+        yearField = new JTextField(4);
+        inputPanel.add(yearField);
+
+        addButton = new JButton("Add Book");
+        listButton = new JButton("List Books");
+        inputPanel.add(addButton);
+        inputPanel.add(listButton);
+
+        add(inputPanel, BorderLayout.NORTH);
+
+        displayArea = new JTextArea();
+        add(new JScrollPane(displayArea), BorderLayout.CENTER);
+
+        addButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                addBook();
+            }
+        });
+
+        listButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                listBooks();
+            }
+        });
+
+        setVisible(true);
+    }
+
+    private void addBook() {
+        String title = titleField.getText();
+        String author = authorField.getText();
+        String yearStr = yearField.getText();
+
+        if (title.isEmpty() || author.isEmpty() || yearStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill in all fields.");
+            return;
+        }
+
+        try {
+            int year = Integer.parseInt(yearStr);
+            if (year < 0) {
+                JOptionPane.showMessageDialog(this, "Year must be a positive integer.");
+                return;
+            }
+
+            try (Connection connection = DriverManager.getConnection(URL, USER, PASSWORD)) {
+                String query = "INSERT INTO books (title, author, published_year, available) VALUES (?, ?, ?, ?)";
+                try (PreparedStatement ps = connection.prepareStatement(query)) {
+                    ps.setString(1, title);
+                    ps.setString(2, author);
+                    ps.setInt(3, year);
+                    ps.setBoolean(4, true);
+                    ps.executeUpdate();
+                    JOptionPane.showMessageDialog(this, "Book added successfully!");
+                    clearFields();
+                }
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Error adding book: " + e.getMessage());
+            }
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Year must be an integer.");
+        }
+    }
+
+    private void listBooks() {
+    try (Connection connection = DriverManager.getConnection(URL, USER, PASSWORD)) {
+        String query = "SELECT * FROM books";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+
+            displayArea.setText("");
+            while (rs.next()) {
+                String bookInfo = "ID: " + rs.getInt("id") + ", Title: " + rs.getString("title") +
+                        ", Author: " + rs.getString("author") + ", Year: " + rs.getInt("published_year") +
+                        ", Available: " + rs.getBoolean("available") + "\n";
+                displayArea.append(bookInfo);
+            }
+        }
+    } catch (SQLException e) {
+        JOptionPane.showMessageDialog(this, "Error listing books: " + e.getMessage());
+    }
+}
+
+    private void clearFields() {
+        titleField.setText("");
+        authorField.setText("");
+        yearField.setText("");
+    }
+
+    
+    public static void main(String[] args) {
+        System.setProperty("java.awt.headless", "true");
+        SwingUtilities.invokeLater(() -> new LibraryManagementSystem());
+    }
+}
