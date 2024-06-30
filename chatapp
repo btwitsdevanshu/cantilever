@@ -1,0 +1,136 @@
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+import java.net.*;
+import java.io.*;
+import java.util.*;
+
+public class ChatApplication {
+    private JFrame frame;
+    private JTextField textField;
+    private JTextArea textArea;
+    private Socket clientSocket;
+    private PrintWriter writer;
+    private BufferedReader reader;
+    private ServerSocket serverSocket;
+    private ArrayList<PrintWriter> clientOutputStreams;
+
+    public ChatApplication() {
+        frame = new JFrame("Chat Application");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setLayout(new BorderLayout());
+
+        textField = new JTextField();
+        textField.addActionListener(new TextFieldListener());
+        frame.add(textField, BorderLayout.NORTH);
+
+        textArea = new JTextArea(10, 30);
+        textArea.setEditable(false);
+        frame.add(new JScrollPane(textArea), BorderLayout.CENTER);
+
+        frame.pack();
+        frame.setVisible(true);
+
+        clientOutputStreams = new ArrayList<PrintWriter>();
+
+        try {
+            serverSocket = new ServerSocket(8000);
+            System.out.println("Chat server is running...");
+
+            Thread t = new Thread(new ServerThread());
+            t.start();
+
+            clientSocket = new Socket("localhost", 8000);
+            writer = new PrintWriter(clientSocket.getOutputStream());
+            reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+
+            Thread t2 = new Thread(new ReaderThread());
+            t2.start();
+        } catch (IOException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) {
+        ChatApplication app = new ChatApplication();
+    }
+
+    private class TextFieldListener implements ActionListener {
+        public void actionPerformed(ActionEvent e) {
+            String message = textField.getText();
+            writer.println(message);
+            writer.flush();
+            textField.setText("");
+        }
+    }
+
+    private class ReaderThread implements Runnable {
+        public void run() {
+            String message;
+            try {
+                while ((message = reader.readLine())!= null) {
+                    textArea.append(message + "\n");
+                }
+            } catch (IOException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    private class ServerThread implements Runnable {
+        public void run() {
+            while (true) {
+                try {
+                    Socket clientSocket = serverSocket.accept();
+                    PrintWriter writer = new PrintWriter(clientSocket.getOutputStream());
+                    clientOutputStreams.add(writer);
+
+                    Thread t = new Thread(new ClientHandler(clientSocket));
+                    t.start();
+                } catch (IOException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    private class ClientHandler implements Runnable {
+        private Socket clientSocket;
+        private BufferedReader reader;
+
+        public ClientHandler(Socket clientSocket) {
+            this.clientSocket = clientSocket;
+            try {
+                reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            } catch (IOException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+
+        public void run() {
+            String message;
+            try {
+                while ((message = reader.readLine())!= null) {
+                    System.out.println("Received message: " + message);
+                    tellEveryone(message);
+                }
+            } catch (IOException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+
+        private void tellEveryone(String message) {
+            Iterator<PrintWriter> it = clientOutputStreams.iterator();
+            while (it.hasNext()) {
+                try {
+                    PrintWriter writer = it.next();
+                    writer.println(message);
+                    writer.flush();
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+            }
+        }
+    }
+    
+}
